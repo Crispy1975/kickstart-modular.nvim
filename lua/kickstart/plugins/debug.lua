@@ -12,18 +12,34 @@ return {
   -- NOTE: And you can specify dependencies as well
   dependencies = {
     -- Creates a beautiful debugger UI
-    'rcarriga/nvim-dap-ui',
-
-    -- Required dependency for nvim-dap-ui
-    'nvim-neotest/nvim-nio',
+    {
+      'rcarriga/nvim-dap-ui',
+      dependencies = { 'mfussenegger/nvim-dap', 'nvim-neotest/nvim-nio' },
+    },
 
     -- Installs the debug adapters for you
-    'williamboman/mason.nvim',
-    'jay-babu/mason-nvim-dap.nvim',
+    {
+      'williamboman/mason.nvim',
+      build = ':MasonUpdate', -- Optional, updates Mason when syncing
+    },
+
+    {
+      'jay-babu/mason-nvim-dap.nvim',
+      dependencies = { 'williamboman/mason.nvim', 'mfussenegger/nvim-dap' },
+    },
 
     -- Add your own debuggers here
     'leoluz/nvim-dap-go',
-    'mxsdev/nvim-dap-vscode-js',
+
+    {
+      'microsoft/vscode-js-debug',
+      build = 'npm i --legacy-peer-deps && npx gulp vsDebugServerBundle && mv dist out',
+    },
+
+    {
+      'mxsdev/nvim-dap-vscode-js',
+      dependencies = { 'mfussenegger/nvim-dap' },
+    },
   },
   config = function()
     local dap = require 'dap'
@@ -43,18 +59,9 @@ return {
       ensure_installed = {
         -- Update this to ensure that you have the debuggers for the langs you want
         'delve',
+        'js-debug-adapter',
       },
     }
-
-    -- Basic debugging keymaps, feel free to change to your liking!
-    vim.keymap.set('n', '<F5>', dap.continue, { desc = 'Debug: Start/Continue' })
-    vim.keymap.set('n', '<F1>', dap.step_into, { desc = 'Debug: Step Into' })
-    vim.keymap.set('n', '<F2>', dap.step_over, { desc = 'Debug: Step Over' })
-    vim.keymap.set('n', '<F3>', dap.step_out, { desc = 'Debug: Step Out' })
-    vim.keymap.set('n', '<leader>b', dap.toggle_breakpoint, { desc = 'Debug: Toggle Breakpoint' })
-    vim.keymap.set('n', '<leader>B', function()
-      dap.set_breakpoint(vim.fn.input 'Breakpoint condition: ')
-    end, { desc = 'Debug: Set Breakpoint' })
 
     -- Dap UI setup
     -- For more information, see |:help nvim-dap-ui|
@@ -78,8 +85,39 @@ return {
       },
     }
 
+    vim.fn.sign_define('DapBreakpoint', { text = '🟥', texthl = '', linehl = '', numhl = '' })
+    vim.fn.sign_define('DapStopped', { text = '▶️', texthl = '', linehl = '', numhl = '' })
+
+    -- DAP key mappings
+    vim.keymap.set('n', '<F5>', require('dap').continue) -- Start/continue debugging
+    vim.keymap.set('n', '<F10>', require('dap').step_over) -- Step over a line
+    vim.keymap.set('n', '<F11>', require('dap').step_into) -- Step into a function
+    vim.keymap.set('n', '<F12>', require('dap').step_out) -- Step out of a function
+    vim.keymap.set('n', '<leader>b', require('dap').toggle_breakpoint) -- Toggle a breakpoint
+    vim.keymap.set('n', '<leader>B', function()
+      require('dap').set_breakpoint(vim.fn.input 'Breakpoint condition: ')
+    end) -- Set conditional breakpoint
+    vim.keymap.set('n', '<leader>dr', require('dap').repl.open) -- Open REPL
+    vim.keymap.set('n', '<leader>dl', require('dap').run_last) -- Run last debug configuration
+
     -- Toggle to see last session result. Without this, you can't see session output in case of unhandled exception.
     vim.keymap.set('n', '<F7>', dapui.toggle, { desc = 'Debug: See last session result.' })
+
+    -- DAP-UI key mappings
+    vim.keymap.set('n', '<leader>dui', dapui.toggle) -- Toggle the DAP UI
+    vim.keymap.set('n', '<leader>dq', require('dap').terminate) -- End the debug session
+    vim.keymap.set('n', '<leader>de', dapui.eval) -- Evaluate the expression under the cursor
+    vim.keymap.set('v', '<leader>de', function() -- Evaluate a visual selection
+      dapui.eval(vim.fn.visualmode())
+    end)
+
+    -- Open/close individual DAP UI elements
+    vim.keymap.set('n', '<leader>do', function()
+      dapui.open()
+    end) -- Open DAP UI
+    vim.keymap.set('n', '<leader>dc', function()
+      dapui.close()
+    end) -- Close DAP UI
 
     dap.listeners.after.event_initialized['dapui_config'] = dapui.open
     dap.listeners.before.event_terminated['dapui_config'] = dapui.close
@@ -92,6 +130,13 @@ return {
         -- See https://github.com/leoluz/nvim-dap-go/blob/main/README.md#configuring
         detached = vim.fn.has 'win32' == 0,
       },
+    }
+
+    -- Setup for nvim-dap-vscode-js
+    require('dap-vscode-js').setup {
+      -- node_path = 'node', -- Path to node executable
+      debugger_path = vim.fn.stdpath 'data' .. '/lazy/vscode-js-debug', -- Path to vscode-js-debug
+      adapters = { 'pwa-node', 'pwa-chrome', 'pwa-msedge', 'node-terminal', 'node' }, -- Supported adapters
     }
   end,
 }
